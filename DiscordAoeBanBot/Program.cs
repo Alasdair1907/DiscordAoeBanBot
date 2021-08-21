@@ -11,11 +11,13 @@ namespace DiscordAoeBanBot
     class Program
     {
         private DiscordSocketClient discordSocketClient;
-        private static string discordToken = "DISCORD_TOKEN_GOES_THERE";
-        private static string channelName = "bans"; // channel where the bot will respond to commands
-        private static string notificationsChannelName = "game-warnings"; // channel where the bot will warn discord users
-        private static string serverName = "AoeDiscordBotTest"; // server name - bot will respond only to this server
+        private string discordToken;
+        private string channelName; // channel where the bot will respond to commands
+        private string notificationsChannelName; // channel where the bot will warn discord users
+        private string serverName; // server name - bot will respond only to this server
 
+        private static string STEAM_ID_TYPE = "steam";
+        private static string AOE_PROFILE_ID_TYPE = "aoe2.net profile";
 
         private static Regex lookupCommandRegex = new Regex(@"\!lookup (?'nick'.+)");
         private static Regex banCommandRegex = new Regex(@"\!(ban|bansteam) (?'id'[0-9]{3,20}) (?'reason'.+)");
@@ -38,6 +40,17 @@ namespace DiscordAoeBanBot
 
         public async Task MainAsync()
         {
+
+            Settings settings = Util.LoadSettings();
+            if (settings == null)
+            {
+                throw new Exception("Error loading settings.");
+            }
+
+            discordToken = settings.DiscordToken;
+            channelName = settings.BansChannelName;
+            notificationsChannelName = settings.NotificationsChannelName;
+            serverName = settings.ServerName;
 
             banList = Util.LoadBanList(Util.GetPathToFile());
             banListSteamIds = banList.Select(b => b.SteamId).ToHashSet();
@@ -222,7 +235,7 @@ namespace DiscordAoeBanBot
             }
 
             if (message.Author.Id == discordSocketClient.CurrentUser.Id || message.Author.IsBot) return;
-            if (message.Channel.Name != channelName && message.Channel.Name == "#" + channelName) return;
+            if (message.Channel.Name != channelName) return;
             if ((message.Channel as SocketGuildChannel).Guild.Name != serverName) return;
             
             if (msg.StartsWith("!ping", true, null))
@@ -233,13 +246,12 @@ namespace DiscordAoeBanBot
 
             if (msg.StartsWith("!history", true, null))
             {
-                // TODO
-                // list players from last 5 lobbies the player played at
-
-                Player targetPlayer = null;
+                List<Lobby> history = null;
+                string steamId = null;
+                string profileId = null;
 
                 // !history
-                if (Regex.IsMatch(msg, @"\!history\s*"))
+                if (Regex.IsMatch(msg, @"\!history \s*"))
                 {
                     string userName = (message.Author as SocketGuildUser).Nickname;
                     if (string.IsNullOrWhiteSpace(userName))
@@ -262,7 +274,8 @@ namespace DiscordAoeBanBot
                         return;
                     }
 
-                    targetPlayer = potentialPlayers[0];
+                    profileId = potentialPlayers[0].ProfileId;
+                    history = Fetcher.GetPlayersMatchHistory(profileId);
                 }
 
                 // !history <nickname>
@@ -285,55 +298,56 @@ namespace DiscordAoeBanBot
                         return;
                     }
 
-                    targetPlayer = potentialPlayers[0];
+                    profileId = potentialPlayers[0].ProfileId;
+                    history = Fetcher.GetPlayersMatchHistory(profileId);
                 }
 
                 // !historysteam <steam_id>
                 Match historySteamMatch = historySteamRegex.Match(msg);
                 if (historySteamMatch.Success)
                 {
-                    string steamId = historySteamMatch.Groups["id"].Value;
-                    targetPlayer = Fetcher.FindPlayerById(steamId, null);
-
-                    if (targetPlayer == null)
-                    {
-                        await message.Channel.SendMessageAsync("I can't find player with steam ID " + steamId + " among AOE players.");
-                        return;
-                    }
+                    steamId = historySteamMatch.Groups["id"].Value;
+                    history = Fetcher.GetPlayersMatchHistorySteamId(steamId);
                 }
 
                 // !historyprofile <profile_id>
                 Match historyProfileMatch = historyProfileRegex.Match(msg);
                 if (historyProfileMatch.Success)
                 {
-                    string profileId = historyProfileMatch.Groups["id"].Value;
-                    targetPlayer = Fetcher.FindPlayerById(null, profileId);
-
-                    if (targetPlayer == null)
+                    profileId = historyProfileMatch.Groups["id"].Value;
+                    
+                    try
                     {
-                        await message.Channel.SendMessageAsync("I can't find player with profile ID " + profileId + " among AOE players.");
+                        int.Parse(profileId);
+                    } catch (Exception ex)
+                    {
+                        await message.Channel.SendMessageAsync("Invalid profile ID: " + profileId);
                         return;
                     }
+
+                    history = Fetcher.GetPlayersMatchHistory(profileId);
                 }
 
-                if (targetPlayer == null)
+                if (history == null)
                 {
-                    await message.Channel.SendMessageAsync("No target player specified.\r\n" + HelpMessages.playedWithMessage);
+                    await message.Channel.SendMessageAsync("Player's history not found.\r\n" + HelpMessages.playedWithMessage);
                     return;
                 }
 
-                List<Lobby> history = Fetcher.GetPlayersMatchHistory(targetPlayer.ProfileId);
-                if (history == null || history.Count < 1)
+                Player targetPlayer = null;
+                if (profileId != null)
                 {
-                    await message.Channel.SendMessageAsync("I can't find history for player " + targetPlayer.Name + "(aoe2.net Profile ID " + targetPlayer.ProfileId + ")");
-                    return;
+                    targetPlayer = history.SelectMany(l => l.Players).Where(p => p.ProfileId == profileId).First();
+                } else
+                {
+                    targetPlayer = history.SelectMany(l => l.Players).Where(p => p.SteamId == steamId).First();
                 }
 
                 await message.Channel.SendMessageAsync("Player " + targetPlayer.Name + " last played in these games: \r\n" + ClassesToTextTransformers.LobbiesToHistory(history));
                 return;
             }
 
-            if (msg.StartsWith("!bansteam ", true, null) || msg.StartsWith("!ban ", true, null))
+            if (msg.StartsWith("!bansteam", true, null) || msg.StartsWith("!ban", true, null))
             {
                 // ban steam ID (!bansteam steamID reason)
                 Match match = banCommandRegex.Match(msg);
@@ -359,17 +373,40 @@ namespace DiscordAoeBanBot
                 if (msg.StartsWith("!bansteam ", true, null))
                 {
                     toBan = Fetcher.FindPlayerById(idToBan, null);
-                    idType = "steam";
+                    idType = STEAM_ID_TYPE;
                 } else
                 {
                     toBan = Fetcher.FindPlayerById(null, idToBan);
-                    idType = "aoe2.net profile";
+                    idType = AOE_PROFILE_ID_TYPE;
                 }
 
                 if (toBan == null)
                 {
-                    await message.Channel.SendMessageAsync("Error: player with " + idType + " ID " + idToBan + " not found!");
-                    return;
+                    // maybe the player isn't on the unranked ladder yet. Try to obtain
+                    // the Player object from that player's match history
+
+                    List<Lobby> playersLobbies = null;
+                    if (idType == STEAM_ID_TYPE)
+                    {
+                        playersLobbies = Fetcher.GetPlayersMatchHistorySteamId(idToBan);
+                    } else
+                    {
+                        playersLobbies = Fetcher.GetPlayersMatchHistory(idToBan);
+                    }
+
+                    if (playersLobbies == null || playersLobbies.Count < 1)
+                    {
+                        await message.Channel.SendMessageAsync("Error: player with " + idType + " ID " + idToBan + " not found!\r\nIf you're not sure how to use this, use !help command.");
+                        return;
+                    }
+
+                    toBan = playersLobbies.SelectMany(l => l.Players).Where(p => (idType == STEAM_ID_TYPE) ? p.SteamId == idToBan : p.ProfileId == idToBan).First();
+
+                    if (toBan == null)
+                    {
+                        await message.Channel.SendMessageAsync("Error: player with " + idType + " ID " + idToBan + " not found!\r\nIf you're not sure how to use this, use !help command.");
+                        return;
+                    }
                 }
 
                 Ban newBan = new Ban
@@ -413,7 +450,7 @@ namespace DiscordAoeBanBot
 
                     if (potentialMatches == null || potentialMatches.Count < 1)
                     {
-                        await message.Channel.SendMessageAsync(HelpMessages.lookupNoResults + "\r\n" + HelpMessages.lookupMessage);
+                        await message.Channel.SendMessageAsync(HelpMessages.lookupNoResults);
                         return;
                     }
 

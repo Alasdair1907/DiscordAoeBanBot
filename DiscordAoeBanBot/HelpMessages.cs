@@ -16,8 +16,8 @@ Following commands are available:
 !lookup <nickname> -- searches for users on the unranked ladder, provides their aoe2.net profile ids and steam ids
 !history -- returns the list of players the discord user has played with in the last 2 games (note: discord user's nick must be the same as in-game nickname)
 !history <nickname> -- return the list of players the player identified by <nickname> has played with in the last 2 games
-!history <steam id> -- same as above, but the user is identified by their steam id
-!history <aoe2.net profile id> -- same as above, but the user is identified by their aoe2.net profile id
+!historysteam <steam id> -- same as above, but the user is identified by their steam id
+!historyprofile <aoe2.net profile id> -- same as above, but the user is identified by their aoe2.net profile id
 !help -- prints this message
 !export -- exports the entire ban list into the excel spreadsheet and posts it into the discord channel
 
@@ -51,8 +51,8 @@ For more information, use !help command.
 ";
         public static string playedWithMessage = @"
 !history <nickname>
-!history <steam_id>
-!history <aoe2.net profile id>
+!historysteam <steam_id>
+!historyprofile <aoe2.net profile id>
 !history
 This command will list last players the player specified with nickname or steamid played with.
 If your discord name matches your in-game name exactly, you can call command !playedwith without any options.
@@ -73,6 +73,20 @@ You can also obtain the list of players (including their IDs) you or someone els
 !history <nickname>
 
 For more information, use !help command.
+";
+
+
+        public static string settingsPartial = @"
+File with settings must be located in the same directory as the executable for this bot.
+Filename must be 
+Example settings file contents:
+
+discord_token=AAAA-BBBBB-CCCCC-DDDDDD
+bans_channel_name=bans
+notifications_channel_name=game-warnings
+server_name=CommunityServer123
+
+Filename for the settigns file:
 ";
     }
 }

@@ -11,7 +11,103 @@ namespace DiscordAoeBanBot
 {
     public class Util
     {
-        public static string banFileName = "discord_aoe_bans.json";
+        public static string banFileName = "discord_aoe_bans.json"; // stored in home folder
+        public static string settingsFileName = "discord_aoe_bans.settings"; // looked for in the current directory
+
+        public static Settings LoadSettings()
+        {
+            TextReader reader = null;
+
+            try
+            {
+                if (!File.Exists(settingsFileName))
+                {
+                    Console.WriteLine(HelpMessages.settingsPartial + settingsFileName);
+                    return null;
+                }
+
+                reader = new StreamReader(settingsFileName, Encoding.UTF8);
+                string contents = reader.ReadToEnd();
+
+                if (string.IsNullOrWhiteSpace(contents))
+                {
+                    Console.WriteLine(HelpMessages.settingsPartial + settingsFileName);
+                    return null;
+                }
+
+                var settingsLines = new List<string>(contents.Split('\n'));
+
+                var settings = new Settings();
+                foreach (var line in settingsLines)
+                {
+                    if (string.IsNullOrWhiteSpace(line))
+                    {
+                        continue;
+                    }
+
+                    var tokens = new List<string>(line.Trim().Split('='));
+                    if (tokens.Count != 2)
+                    {
+                        Console.WriteLine("Error parsing settings line: " + line + "\r\n");
+                        Console.WriteLine(HelpMessages.settingsPartial + settingsFileName);
+                        return null;
+                    }
+                    
+                    switch (tokens[0])
+                    {
+                        case "discord_token":
+                            settings.DiscordToken = tokens[1];
+                            break;
+                        case "bans_channel_name":
+                            settings.BansChannelName = tokens[1];
+                            break;
+                        case "notifications_channel_name":
+                            settings.NotificationsChannelName = tokens[1];
+                            break;
+                        case "server_name":
+                            settings.ServerName = tokens[1];
+                            break;
+                        default:
+                            Console.WriteLine("Error: unknown settings key: " + tokens[0]);
+                            return null;
+                    }
+                }
+
+                if (string.IsNullOrWhiteSpace(settings.DiscordToken))
+                {
+                    Console.WriteLine("Error: discord_token setting must be provided");
+                    Console.WriteLine(HelpMessages.settingsPartial + settingsFileName);
+                    return null;
+                }
+
+                if (string.IsNullOrWhiteSpace(settings.BansChannelName))
+                {
+                    Console.WriteLine("Error: bans_channel_name setting must be provided");
+                    Console.WriteLine(HelpMessages.settingsPartial + settingsFileName);
+                    return null;
+                }
+
+                if (string.IsNullOrWhiteSpace(settings.NotificationsChannelName))
+                {
+                    Console.WriteLine("Error: notifications_channel_name setting must be provided");
+                    Console.WriteLine(HelpMessages.settingsPartial + settingsFileName);
+                    return null;
+                }
+
+                if (string.IsNullOrWhiteSpace(settings.ServerName))
+                {
+                    Console.WriteLine("Error: server_name setting must be provided");
+                    Console.WriteLine(HelpMessages.settingsPartial + settingsFileName);
+                    return null;
+                }
+
+                return settings;
+            } catch (Exception ex)
+            {
+                Console.WriteLine("Error attempting to load settings file " + settingsFileName + ": " + ex.Message);
+                return null;
+            }
+        }
 
         public static string GetPathToFile()
         {
