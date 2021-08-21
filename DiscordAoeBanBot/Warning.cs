@@ -25,7 +25,7 @@ namespace DiscordAoeBanBot
         public string ToMessage(List<SocketGuildUser> guildUsers, List<Ban> banList)
         {
             List<string> goodPlayersNames = GoodPlayers.Select(p => p.Name).ToList();
-            List<SocketGuildUser> usersToWarn = guildUsers.Where(gU => goodPlayersNames.Contains(gU.Nickname)).ToList();
+            List<SocketGuildUser> usersToWarn = guildUsers.Where(gU => goodPlayersNames.Contains(gU.Nickname ?? gU.Username)).ToList();
 
             StringBuilder sb = new StringBuilder();
             foreach (SocketGuildUser sgu in usersToWarn)
@@ -33,19 +33,19 @@ namespace DiscordAoeBanBot
                 sb.Append(sgu.Mention + " ");
             }
 
-            sb.Append(" Following banned users have been detected in the lobby \"");
+            sb.Append(" Following banned users have been detected in the lobby \"**");
             sb.Append(Lobby.Name);
-            sb.Append("\": ");
+            sb.Append("**\":\r\n");
 
 
             foreach (Player banned in BadPlayers)
             {
                 List<Ban> correspondingBans = banList.Where(b => b.ProfileId == banned.ProfileId || b.SteamId == banned.SteamId).ToList();
-                sb.Append(string.Format("player \"{0}\" originally known as \"{1}\" (Steam ID {2}) (aoe2.net Profile ID {3})\r\n",
+                sb.Append(string.Format("player \"**{0}**\" originally known as \"{1}\" (Steam ID {2}) (aoe2.net Profile ID {3})\r\n",
                     banned.Name, correspondingBans[0].NickWhenBanned, correspondingBans[0].SteamId, correspondingBans[0].ProfileId));
                 foreach (Ban ban in correspondingBans)
                 {
-                    sb.Append("banned by " + ban.BannedBy + " for reason: " + ban.Reason + "\r\n");
+                    sb.Append("banned by " + ban.BannedBy + " for reason: __" + ban.Reason + "__\r\n");
                 }
 
             }

@@ -183,8 +183,6 @@ namespace DiscordAoeBanBot
                     
                 }
 
-                userListInUse = false;
-
                 SocketGuildChannel sgc = discordSocketClient.Guilds.Where(g => g.Name == serverName).First().Channels.Where(c => c.Name == notificationsChannelName || c.Name == "#" + notificationsChannelName).First();
                 var chnl = discordSocketClient.GetChannel(sgc.Id) as ISocketMessageChannel;
                 foreach (Warning warning in warnings)
@@ -198,6 +196,8 @@ namespace DiscordAoeBanBot
                     await chnl.SendMessageAsync(warning.ToMessage(guildUsers, banList));
                     notificationsSent.Add(warningHash);
                 }
+
+                userListInUse = false;
             }
 
         }
@@ -253,7 +253,7 @@ namespace DiscordAoeBanBot
                 // !history
                 if (Regex.IsMatch(msg, @"\!history \s*"))
                 {
-                    string userName = (message.Author as SocketGuildUser).Nickname;
+                    string userName = (message.Author as SocketGuildUser).Nickname ?? message.Author.Username;
                     if (string.IsNullOrWhiteSpace(userName))
                     {
                         userName = message.Author.Username;
