@@ -1,6 +1,6 @@
 # DiscordAoeBanBot
 Bot for Age of Empires II DE Discord communities, that maintains list of unwanted players and notifies members when they are joined in game lobbies by the unwanted players.\
-The bot accepts commands for finding players and banning them on the channel specified by bans_channel in the settings.\
+The bot accepts commands for finding players and banning them on the channel specified by bans_channel_name in the settings.\
 The bot warns discord server users (whose names are exact matches to their in-game names) in the channel specified by notifications_channel_name in the settings.\
 One instance of bot will work only with one server.\
 \
