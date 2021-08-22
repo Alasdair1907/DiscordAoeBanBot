@@ -15,7 +15,7 @@ namespace DiscordAoeBanBot
         public static readonly string playerBySteamIdRequestPartial = "https://aoe2.net/api/leaderboard?game=aoe2de&leaderboard_id=0&start=1&count=1&steam_id=";
         public static readonly string playerByProfileIdRequestPartial = "https://aoe2.net/api/leaderboard?game=aoe2de&leaderboard_id=0&start=1&count=1&profile_id=";
         public static readonly string playersMatchHistoryRequestPartial = "https://aoe2.net/api/player/matches?game=aoe2de&count=2&start=0&profile_id=";
-        public static readonly string playersMatchHistorySteamIdRequestPartial = "https://aoe2.net/api/player/matches?game=aoe2de&count=2&start=0&profile_id=";
+        public static readonly string playersMatchHistorySteamIdRequestPartial = "https://aoe2.net/api/player/matches?game=aoe2de&count=2&start=0&steam_id=";
 
         public static List<Lobby> GetLobbies()
         {
