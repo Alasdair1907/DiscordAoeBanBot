@@ -40,7 +40,7 @@ namespace DiscordAoeBanBot
 
             foreach (Player banned in BadPlayers)
             {
-                List<Ban> correspondingBans = banList.Where(b => b.ProfileId == banned.ProfileId || b.SteamId == banned.SteamId).ToList();
+                List<Ban> correspondingBans = banList.Where(b => (b.ProfileId == banned.ProfileId && b.ProfileId != null) || (b.SteamId == banned.SteamId && b.SteamId != null)).ToList();
                 sb.Append(string.Format("player \"**{0}**\" originally known as \"{1}\" (Steam ID {2}) (aoe2.net Profile ID {3})\r\n",
                     banned.Name, correspondingBans[0].NickWhenBanned, correspondingBans[0].SteamId, correspondingBans[0].ProfileId));
                 foreach (Ban ban in correspondingBans)
