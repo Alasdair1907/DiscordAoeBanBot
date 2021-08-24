@@ -45,7 +45,7 @@ For more information, use !help command.
 
         public static string lookupNoResults = @"
 No results found for provided nickname.
-Try using command !playedwith to obtain the list of last players you played with/against.
+Try using command !history to obtain the list of last players you played with/against.
 
 For more information, use !help command.
 ";
@@ -55,7 +55,7 @@ For more information, use !help command.
 !historyprofile <aoe2.net profile id>
 !history
 This command will list last players the player specified with nickname or steamid played with.
-If your discord name matches your in-game name exactly, you can call command !playedwith without any options.
+If your discord name matches your in-game name exactly, you can call command !history without any options.
 
 For more information, use !help command.
 ";

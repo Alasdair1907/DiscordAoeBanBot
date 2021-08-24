@@ -251,7 +251,7 @@ namespace DiscordAoeBanBot
                 string profileId = null;
 
                 // !history
-                if (Regex.IsMatch(msg, @"\!history \s*"))
+                if (Regex.IsMatch(msg, @"\!history\s*"))
                 {
                     string userName = (message.Author as SocketGuildUser).Nickname ?? message.Author.Username;
                     if (string.IsNullOrWhiteSpace(userName))
