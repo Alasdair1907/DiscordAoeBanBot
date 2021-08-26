@@ -251,7 +251,7 @@ namespace DiscordAoeBanBot
                 string profileId = null;
 
                 // !history
-                if (Regex.IsMatch(msg, @"\!history\s*"))
+                if (Regex.IsMatch(msg, @"\!history\s*$"))
                 {
                     string userName = (message.Author as SocketGuildUser).Nickname ?? message.Author.Username;
                     if (string.IsNullOrWhiteSpace(userName))
@@ -269,7 +269,7 @@ namespace DiscordAoeBanBot
 
                     if (potentialPlayers.Count > 1)
                     {
-                        await message.Channel.SendMessageAsync(message.Author.Mention + " There is a number of nicknames identical to yours (" + userName + "), which one are you? Use !history <steam_id> to specify." + 
+                        await message.Channel.SendMessageAsync(message.Author.Mention + " There is a number of nicknames identical to yours (" + userName + "), which one are you? Use !historyprofile <aoe2.net profile id> or !historysteam <steam id> to specify:\r\n" + 
                             ClassesToTextTransformers.PlayersToLookupCandidates(potentialPlayers));
                         return;
                     }
@@ -293,7 +293,7 @@ namespace DiscordAoeBanBot
 
                     if (potentialPlayers.Count > 1)
                     {
-                        await message.Channel.SendMessageAsync("There is a number of nicknames identical to the one you provided (" + nickName + "). Use !historysteam <steam_id> or !historyprofile <aoe2.net profile_id> to specify:\r\n" +
+                        await message.Channel.SendMessageAsync("There is a number of nicknames identical to the one you provided (" + nickName + "). Use !historyprofile <aoe2.net profile_id> or !historysteam <steam_id> to specify:\r\n" +
                             ClassesToTextTransformers.PlayersToLookupCandidates(potentialPlayers));
                         return;
                     }
