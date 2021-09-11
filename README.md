@@ -19,3 +19,4 @@ discord_token=AAAA-BBBBB-CCCCC-DDDDDD\
 bans_channel_name=bans\
 notifications_channel_name=game-warnings\
 server_name=CommunityServer123
+unban_roles=role name1;extended role;another privileged role
