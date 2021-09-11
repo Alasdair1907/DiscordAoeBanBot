@@ -22,15 +22,15 @@ namespace DiscordAoeBanBot
             return Util.SHA256Str(warningIdentifier);
         }
 
-        public string ToMessage(List<SocketGuildUser> guildUsers, List<Ban> banList)
+        public string ToMessage(List<DiscordUser> guildUsers, List<Ban> banList)
         {
             List<string> goodPlayersNames = GoodPlayers.Select(p => p.Name).ToList();
-            List<SocketGuildUser> usersToWarn = guildUsers.Where(gU => goodPlayersNames.Contains(gU.Nickname ?? gU.Username)).ToList();
+            List<DiscordUser> usersToWarn = guildUsers.Where(gU => goodPlayersNames.Contains(gU.Name)).ToList();
 
             StringBuilder sb = new StringBuilder();
-            foreach (SocketGuildUser sgu in usersToWarn)
+            foreach (DiscordUser du in usersToWarn)
             {
-                sb.Append(sgu.Mention + " ");
+                sb.Append(du.Mention + " ");
             }
 
             sb.Append(" Following banned users have been detected in the lobby \"**");

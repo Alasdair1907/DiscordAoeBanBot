@@ -44,5 +44,23 @@ namespace DiscordAoeBanBot
 
             return sb.ToString();
         }
+
+        // we are assuming, that all unbanned Bans have same profile ID
+        public static string UnbannedListToMessage(List<Ban> unbanned)
+        {
+            StringBuilder sb = new StringBuilder();
+
+            sb.Append("Following bans have been removed:\r\n");
+            sb.Append(string.Format("AOE2.NET Profile ID: {0} Steam ID: {1}\r\n", unbanned[0].ProfileId, unbanned[0].SteamId));
+
+            foreach (var ban in unbanned)
+            {
+                sb.Append("Nick when banned: " + ban.NickWhenBanned + "; ");
+                sb.Append("Reason: " + ban.Reason);
+                sb.Append("\r\n");
+            }
+
+            return sb.ToString();
+        }
     }
 }

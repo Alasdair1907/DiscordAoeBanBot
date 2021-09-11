@@ -6,6 +6,7 @@ using System.Data;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Linq;
 
 namespace DiscordAoeBanBot
 {
@@ -45,7 +46,7 @@ namespace DiscordAoeBanBot
                         continue;
                     }
 
-                    var tokens = new List<string>(line.Trim().Split('='));
+                    var tokens = new List<string>(line.Trim().Split('=',2));
                     if (tokens.Count != 2)
                     {
                         Console.WriteLine("Error parsing settings line: " + line + "\r\n");
@@ -66,6 +67,16 @@ namespace DiscordAoeBanBot
                             break;
                         case "server_name":
                             settings.ServerName = tokens[1];
+                            break;
+                        case "unban_roles":
+                            string[] roles = tokens[1].Split(";", StringSplitOptions.RemoveEmptyEntries);
+                            if (roles.Length < 1)
+                            {
+                                settings.UnbanRoles = new List<string>();
+                                break;
+                            }
+
+                            settings.UnbanRoles = roles.Select(s => s.Trim().ToLower()).ToList();
                             break;
                         default:
                             Console.WriteLine("Error: unknown settings key: " + tokens[0]);

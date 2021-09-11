@@ -15,21 +15,24 @@ namespace DiscordAoeBanBot
         private string channelName; // channel where the bot will respond to commands
         private string notificationsChannelName; // channel where the bot will warn discord users
         private string serverName; // server name - bot will respond only to this server
+        private List<string> unbanRoles; // list of role names, users of which are allowed to use !unban command
 
         private static string STEAM_ID_TYPE = "steam";
         private static string AOE_PROFILE_ID_TYPE = "aoe2.net profile";
 
         private static Regex lookupCommandRegex = new Regex(@"\!lookup (?'nick'.+)");
         private static Regex banCommandRegex = new Regex(@"\!(ban|bansteam) (?'id'[0-9]{3,20}) (?'reason'.+)");
+        private static Regex unbanCommandRegex = new Regex(@"\!(unban|unbanprofile) (?'id'[0-9]{1,10})");
         private static Regex historyNicknameRegex = new Regex(@"\!history (?'nick'.+)");
         private static Regex historySteamRegex = new Regex(@"\!historysteam (?'id'[0-9]{3,20})");
         private static Regex historyProfileRegex = new Regex(@"\!historyprofile (?'id'[0-9]{3,10})");
 
-        private volatile bool userListInUse = false;
-        List<SocketGuildUser> guildUsers = new List<SocketGuildUser>();
+        private object userListLock = new object();
+        private object banListLock = new object ();
+
+        List<DiscordUser> guildUsers = new List<DiscordUser>();
         List<string> guildUsersNames = new List<string>();
 
-        private volatile bool banListBeingUpdated = false;
         List<Ban> banList = null;
         HashSet<string> banListSteamIds = null;
         HashSet<string> banListProfileIds = null;
@@ -51,6 +54,7 @@ namespace DiscordAoeBanBot
             channelName = settings.BansChannelName;
             notificationsChannelName = settings.NotificationsChannelName;
             serverName = settings.ServerName;
+            unbanRoles = settings.UnbanRoles ?? new List<string>();
 
             banList = Util.LoadBanList(Util.GetPathToFile());
             banListSteamIds = banList.Select(b => b.SteamId).ToHashSet();
@@ -85,25 +89,26 @@ namespace DiscordAoeBanBot
                     continue;
                 }
 
-                while (userListInUse)
-                {
-                    await Task.Delay(100);
-                }
-                userListInUse = true;
-
-                SocketGuild guild = discordSocketClient.Guilds.Where(g=>g.Name == serverName).First();
-                
+                SocketGuild guild = discordSocketClient.Guilds.Where(g => g.Name == serverName).First();
                 await guild.DownloadUsersAsync();
-                
-                guildUsers.Clear();
-                guildUsersNames.Clear();
-                foreach (SocketGuildUser user in guild.Users)
+
+                lock (userListLock)
                 {
-                    guildUsers.Add(user);
-                    guildUsersNames.Add(user.Nickname ?? user.Username);
+                    guildUsers.Clear();
+                    guildUsersNames.Clear();
+                    foreach (SocketGuildUser user in guild.Users)
+                    {
+                        var discordUser = new DiscordUser
+                        {
+                            Name = user.Nickname ?? user.Username,
+                            Mention = user.Mention
+                        };
+
+                        guildUsers.Add(discordUser);
+                        guildUsersNames.Add(discordUser.Name);
+                    }
                 }
 
-                userListInUse = false;
                 await Task.Delay(60 * 1000);
             }
         }
@@ -136,68 +141,74 @@ namespace DiscordAoeBanBot
                     continue;
                 }
 
-                List<Warning> warnings = new List<Warning>();
+                var warnings = new List<Warning>();
+                var toSend = new List<string>();
 
-                while (userListInUse)
+                lock (userListLock)
                 {
-                    await Task.Delay(100);
-                }
-                userListInUse = true;
-
-                foreach (Lobby lobby in lobbies)
-                {
-                    if (lobby.Players == null)
+                    lock (banListLock)
                     {
-                        continue;
-                    }
-
-                    
-                    List<Player> bannedPlayersInTheLobby = new List<Player>();
-                    List<Player> goodGuysInTheLobby = new List<Player>();
-
-                    foreach (Player player in lobby.Players)
-                    {
-                        if ( (player.SteamId != null && banListSteamIds.Contains(player.SteamId)) ||
-                            (player.ProfileId != null && banListProfileIds.Contains(player.ProfileId)) )
+                        foreach (Lobby lobby in lobbies)
                         {
-                            bannedPlayersInTheLobby.Add(player);
+                            if (lobby.Players == null)
+                            {
+                                continue;
+                            }
+
+
+                            List<Player> bannedPlayersInTheLobby = new List<Player>();
+                            List<Player> goodGuysInTheLobby = new List<Player>();
+
+                            foreach (Player player in lobby.Players)
+                            {
+                                if ((player.SteamId != null && banListSteamIds.Contains(player.SteamId)) ||
+                                    (player.ProfileId != null && banListProfileIds.Contains(player.ProfileId)))
+                                {
+                                    bannedPlayersInTheLobby.Add(player);
+                                }
+
+                                if (player.Name != null && guildUsersNames.Contains(player.Name))
+                                {
+                                    goodGuysInTheLobby.Add(player);
+                                }
+
+                            }
+
+                            if (bannedPlayersInTheLobby.Count > 0 && goodGuysInTheLobby.Count > 0)
+                            {
+                                Warning warning = new Warning
+                                {
+                                    Lobby = lobby,
+                                    BadPlayers = bannedPlayersInTheLobby,
+                                    GoodPlayers = goodGuysInTheLobby
+                                };
+                                warnings.Add(warning);
+                            }
+
                         }
 
-                        if (player.Name != null && guildUsersNames.Contains(player.Name))
+                        foreach (Warning warning in warnings)
                         {
-                            goodGuysInTheLobby.Add(player);
+                            string warningHash = warning.WarningHash();
+                            if (notificationsSent.Contains(warningHash))
+                            {
+                                continue;
+                            }
+
+                            toSend.Add(warning.ToMessage(guildUsers, banList));
+                            notificationsSent.Add(warningHash);
                         }
-
                     }
-
-                    if (bannedPlayersInTheLobby.Count > 0 && goodGuysInTheLobby.Count > 0)
-                    {
-                        Warning warning = new Warning
-                        {
-                            Lobby = lobby,
-                            BadPlayers = bannedPlayersInTheLobby,
-                            GoodPlayers = goodGuysInTheLobby
-                        };
-                        warnings.Add(warning);
-                    }
-                    
                 }
 
                 SocketGuildChannel sgc = discordSocketClient.Guilds.Where(g => g.Name == serverName).First().Channels.Where(c => c.Name == notificationsChannelName || c.Name == "#" + notificationsChannelName).First();
                 var chnl = discordSocketClient.GetChannel(sgc.Id) as ISocketMessageChannel;
-                foreach (Warning warning in warnings)
+                foreach (var message in toSend)
                 {
-                    String warningHash = warning.WarningHash();
-                    if (notificationsSent.Contains(warningHash))
-                    {
-                        continue;
-                    }
-
-                    await chnl.SendMessageAsync(warning.ToMessage(guildUsers, banList));
-                    notificationsSent.Add(warningHash);
+                    await chnl.SendMessageAsync(message);
                 }
 
-                userListInUse = false;
+                toSend.Clear();
             }
 
         }
@@ -242,7 +253,6 @@ namespace DiscordAoeBanBot
             {
                 await message.Channel.SendMessageAsync("pong!");
             }
-
 
             if (msg.StartsWith("!history", true, null))
             {
@@ -418,7 +428,7 @@ namespace DiscordAoeBanBot
                     Reason = reason
                 };
 
-                await PerformBan(newBan);
+                PerformBan(newBan);
                 await message.Channel.SendMessageAsync(string.Format("Player with Profile ID {3}/Steam ID {0} ({1}) has been added to the ban list by {2}.", newBan.SteamId, newBan.NickWhenBanned, newBan.BannedBy, newBan.ProfileId));
             }
 
@@ -463,6 +473,60 @@ namespace DiscordAoeBanBot
                 }
             }
 
+            if (msg.StartsWith("!unban", StringComparison.OrdinalIgnoreCase))
+            {
+                if (unbanRoles == null || unbanRoles.Count < 1)
+                {
+                    await message.Channel.SendMessageAsync(HelpMessages.unbanMessageNoRoles);
+                    return;
+                }
+
+                Match m = unbanCommandRegex.Match(msg);
+                if (!m.Success)
+                {
+                    await message.Channel.SendMessageAsync(HelpMessages.unbanMessagePartial + string.Join("; ", unbanRoles));
+                    return;
+                }
+
+                int banId;
+                try
+                {
+                    banId = int.Parse(m.Groups["id"].Value);
+                } catch (Exception ex)
+                {
+                    await message.Channel.SendMessageAsync("Invalid ID for unbanning: " + m.Groups["id"].Value);
+                    return;
+                }
+
+                var roles = (message.Author as SocketGuildUser).Roles;
+                if (roles == null || !roles.Where(r => unbanRoles.Contains(r.Name.ToLower())).Any())
+                {
+                    await message.Channel.SendMessageAsync("Only users with following roles are allowed to unban: " + string.Join("; ", unbanRoles));
+                    return;
+                }
+
+                if (msg.StartsWith("!unbanprofile"))
+                {
+                    List<Ban> unbanned = PerformProfileUnban(m.Groups["id"].Value);
+                    if (unbanned != null && unbanned.Count > 0)
+                    {
+                        await message.Channel.SendMessageAsync(ClassesToTextTransformers.UnbannedListToMessage(unbanned));
+                        return;
+                    }
+                } else
+                {
+                    Ban unbanned = PerformUnban(banId);
+                    if (unbanned != null)
+                    {
+                        await message.Channel.SendMessageAsync(string.Format("Following ban has been removed:\r\nUser nickname when banned: {0}\r\nAOE2.NET profile ID: {1}\r\nReason for ban: {2}",
+                            unbanned.NickWhenBanned, unbanned.ProfileId, unbanned.Reason));
+                        return;
+                    }
+                }
+
+                await message.Channel.SendMessageAsync("No bans have been removed.");
+            }
+
             if (msg.Equals("!export", StringComparison.OrdinalIgnoreCase))
             {
                 if (banList == null || banList.Count < 1)
@@ -483,30 +547,59 @@ namespace DiscordAoeBanBot
             }
         }
 
-        private async Task PerformBan(Ban ban)
+        private Ban PerformUnban(int banId)
         {
-
-            while (banListBeingUpdated)
+            Ban ban = null;
+            lock (banListLock)
             {
-                await Task.Delay(50);
+                ban = banList.Where(b => b.BanId == banId).First();
+
+                banList.Remove(ban);
+                banListProfileIds.Remove(ban.ProfileId);
+                banListSteamIds.Remove(ban.SteamId);
+
+                Util.SaveBanList(banList, Util.GetPathToFile());
+            }
+            return ban;
+        }
+
+        private List<Ban> PerformProfileUnban(string profileId)
+        {
+            List<Ban> bans = null;
+            lock (banListLock)
+            {
+                bans = banList.Where(b => b.ProfileId == profileId).ToList();
+
+                foreach (var ban in bans)
+                {
+                    banList.Remove(ban);
+                    banListSteamIds.Remove(ban.SteamId);
+                    banListProfileIds.Remove(ban.ProfileId);
+                }
+
+                Util.SaveBanList(banList, Util.GetPathToFile());
             }
 
-            banListBeingUpdated = true;
+            return bans;
+        }
 
-            int nextId = 0;
-            if (banList.Count > 0)
+        private void PerformBan(Ban ban)
+        {
+            lock (banListLock)
             {
-                nextId = banList.Max(b => b.BanId) + 1;
+                int nextId = 0;
+                if (banList.Count > 0)
+                {
+                    nextId = banList.Max(b => b.BanId) + 1;
+                }
+
+                ban.BanId = nextId;
+
+                banList.Add(ban);
+                Util.SaveBanList(banList, Util.GetPathToFile());
+                banListSteamIds.Add(ban.SteamId);
+                banListProfileIds.Add(ban.ProfileId);
             }
-
-            ban.BanId = nextId;
-
-            banList.Add(ban);
-            Util.SaveBanList(banList, Util.GetPathToFile());
-            banListSteamIds.Add(ban.SteamId);
-            banListProfileIds.Add(ban.ProfileId);
-
-            banListBeingUpdated = false;
         }
 
 
